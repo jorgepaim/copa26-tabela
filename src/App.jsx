@@ -465,6 +465,25 @@ function KnockoutRow(p){
   );
 }
 
+// ── Atualização de placares via API ─────────────────────────────────────────
+var SCORES_API_URL = "https://copa26-proxy.brzl.workers.dev";
+function applyRemoteScores(remoteMatches, prevScores){
+  var next = Object.assign({}, prevScores);
+  var updated = 0;
+  remoteMatches.forEach(function(rm){
+    if(rm.stage!=="GROUP_STAGE") return;
+    if(!rm.score||!rm.score.fullTime) return;
+    var hg=rm.score.fullTime.home; var ag=rm.score.fullTime.away;
+    if(hg===null||ag===null||hg===undefined||ag===undefined) return;
+    var home=rm.homeTeam&&rm.homeTeam.tla; var away=rm.awayTeam&&rm.awayTeam.tla;
+    var gm=MATCHES.find(function(m){return m.home===home&&m.away===away;});
+    if(!gm) return;
+    var hKey=gm.id+"_h"; var aKey=gm.id+"_a"; var hVal=String(hg); var aVal=String(ag);
+    if(next[hKey]!==hVal||next[aKey]!==aVal){ next[hKey]=hVal; next[aKey]=aVal; updated++; }
+  });
+  return {scores:next, updated:updated};
+}
+
 // ── App ────────────────────────────────────────────────────────────────────
 export default function App(){
   var s1=useState(loadScores); var scores=s1[0]; var setScores=s1[1];
@@ -476,6 +495,22 @@ export default function App(){
   var s12=useState("");       var jogFilter=s12[0];var setJogFilter=s12[1];
   var s13=useState("");       var jogSearch=s13[0];var setJogSearch=s13[1];
   var s14=useState(currentPhaseKey);var fase=s14[0];var setFase=s14[1];
+  var s15=useState(false);    var updating=s15[0]; var setUpdating=s15[1];
+  var s16=useState("");       var updateMsg=s16[0]; var setUpdateMsg=s16[1];
+
+  function updateScoresFromApi(){
+    setUpdating(true); setUpdateMsg("");
+    fetch(SCORES_API_URL)
+      .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+      .then(function(data){
+        var result=applyRemoteScores(data.matches||[],scores);
+        setScores(result.scores);
+        try{localStorage.setItem("tabela26_sc",JSON.stringify(result.scores));}catch{ /* noop */ }
+        setUpdateMsg(result.updated>0?result.updated+" placar(es) atualizado(s).":"Nenhum jogo novo finalizado ainda.");
+      })
+      .catch(function(){ setUpdateMsg("Erro ao buscar placares. Tente novamente."); })
+      .finally(function(){ setUpdating(false); });
+  }
 
   function setScore(mid,side,val){
     var num=val.replace(/\D/g,"");
@@ -559,6 +594,14 @@ export default function App(){
               <div style={{color:"rgba(255,255,255,0.7)",fontSize:11}}>
                 {fase==="grupos"?"72 partidas · Placares editáveis · escolha a fase abaixo":"Projeção ao vivo a partir da classificação (1º e 2º de cada grupo + 8 melhores 3ºs · regras FIFA)"}
               </div>
+            </div>
+
+            <div style={{background:"#fff",borderRadius:12,padding:"10px 12px",marginBottom:12,boxShadow:"0 1px 5px rgba(0,0,0,0.07)",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <button onClick={updateScoresFromApi} disabled={updating}
+                style={{padding:"7px 14px",borderRadius:20,border:"none",cursor:updating?"default":"pointer",fontWeight:700,fontSize:11,background:"#002776",color:"#fff",opacity:updating?0.6:1}}>
+                {updating?"Atualizando...":"🔄 Atualizar placares"}
+              </button>
+              {updateMsg&&<span style={{fontSize:11,color:"#666"}}>{updateMsg}</span>}
             </div>
 
             {fase==="grupos"&&(
