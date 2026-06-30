@@ -533,7 +533,15 @@ function applyRemoteScores(remoteMatches, prevScores, ko){
     var home=rm.homeTeam&&rm.homeTeam.tla; var away=rm.awayTeam&&rm.awayTeam.tla;
     var gm=null;
     if(rm.stage==="GROUP_STAGE"){
+      var swapped=false;
       gm=MATCHES.find(function(m){return m.home===home&&m.away===away;});
+      if(!gm){ gm=MATCHES.find(function(m){return m.home===away&&m.away===home;}); swapped=true; }
+      if(gm){
+        var hKey=gm.id+"_h"; var aKey=gm.id+"_a";
+        var hVal=String(swapped?ag:hg); var aVal=String(swapped?hg:ag);
+        if(next[hKey]!==hVal||next[aKey]!==aVal){ next[hKey]=hVal; next[aKey]=aVal; updated++; }
+      }
+      return;
     } else {
       gm=allKo.find(function(m){return m.home===home&&m.away===away;});
       if(gm&&rm.score.penalties){
