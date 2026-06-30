@@ -542,31 +542,40 @@ function applyRemoteScores(remoteMatches, prevScores, ko){
         if(next[hKey]!==hVal||next[aKey]!==aVal){ next[hKey]=hVal; next[aKey]=aVal; updated++; }
       }
     } else {
-      // Mata-mata: a API codifica fullTime como total geral (tempo normal + prorrogação + pênaltis),
-      // extraTime como delta de gols só na prorrogação e penalties como apenas os pênaltis convertidos.
-      // Placar do tempo normal+prorrogação = fullTime − extraTime − penalties.
+      // Mata-mata:
+      // A API usa fullTime como total cumulativo (90min + prorrogação + pênaltis convertidos).
+      // regularTime = placar dos 90min, extraTime = delta de gols só na prorrogação.
+      // Gols no shootout = fullTime − regularTime − extraTime.
       var ft=rm.score.fullTime||{};
+      var rt=rm.score.regularTime;
       var et=rm.score.extraTime||{};
       var pen=rm.score.penalties;
       var ftH=ft.home; var ftA=ft.away;
       if(ftH==null||ftA==null) return;
       var gm=allKo.find(function(m){return m.home===home&&m.away===away;});
       if(!gm) return;
-      var ph=pen&&pen.home!=null?pen.home:0;
-      var pa=pen&&pen.away!=null?pen.away:0;
-      var etH=et.home!=null?et.home:0;
-      var etA=et.away!=null?et.away:0;
-      var hg=pen?ftH-etH-ph:ftH;
-      var ag=pen?ftA-etA-pa:ftA;
-      // Resultado negativo = dado inválido na API; usa fullTime bruto como fallback
-      if(hg<0||ag<0){ hg=ftH; ag=ftA; ph=0; pa=0; }
-      // Partida de pênaltis deve terminar empatada antes do shootout.
-      // Se a subtração der placar assimétrico é inconsistência nos dados da API —
-      // usa o menor dos dois valores para forçar empate (campo de pênaltis fica visível).
-      if(pen&&ph>0&&pa>0&&hg!==ag){ var ms=Math.min(hg,ag); hg=ms; ag=ms; }
+      var hg,ag,ph,pa;
+      if(pen!=null&&rt!=null&&rt.home!=null&&rt.away!=null){
+        // Caso com pênaltis e campo regularTime disponível (Copa 2026 API)
+        var etH=et.home!=null?et.home:0; var etA=et.away!=null?et.away:0;
+        hg=rt.home; ag=rt.away;           // placar dos 90min no campo principal
+        ph=ftH-rt.home-etH;               // gols convertidos no shootout
+        pa=ftA-rt.away-etA;
+        if(ph<0||pa<0){ ph=0; pa=0; }
+      } else if(pen!=null){
+        // Fallback: sem regularTime; tenta fullTime − extraTime − penalties
+        var etH=et.home!=null?et.home:0; var etA=et.away!=null?et.away:0;
+        var pph=pen.home!=null?pen.home:0; var ppa=pen.away!=null?pen.away:0;
+        hg=ftH-etH-pph; ag=ftA-etA-ppa; ph=pph; pa=ppa;
+        if(hg<0||ag<0){ hg=ftH; ag=ftA; ph=0; pa=0; }
+        if(hg!==ag){ var ms=Math.min(hg,ag); hg=ms; ag=ms; }
+      } else {
+        // Vitória no tempo normal ou prorrogação (sem pênaltis): fullTime é o resultado final
+        hg=ftH; ag=ftA; ph=0; pa=0;
+      }
       var hKey=gm.id+"_h"; var aKey=gm.id+"_a"; var hVal=String(hg); var aVal=String(ag);
       if(next[hKey]!==hVal||next[aKey]!==aVal){ next[hKey]=hVal; next[aKey]=aVal; updated++; }
-      if(pen&&ph>0&&pa>0){
+      if(ph>0&&pa>0){
         if(next[gm.id+"_ph"]!==String(ph)||next[gm.id+"_pa"]!==String(pa)){
           next[gm.id+"_ph"]=String(ph); next[gm.id+"_pa"]=String(pa); updated++;
         }
