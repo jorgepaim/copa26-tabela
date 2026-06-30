@@ -542,21 +542,33 @@ function applyRemoteScores(remoteMatches, prevScores, ko){
         if(next[hKey]!==hVal||next[aKey]!==aVal){ next[hKey]=hVal; next[aKey]=aVal; updated++; }
       }
     } else {
-      // Mata-mata: usa extraTime quando disponível (prorrogação), senão fullTime (90min)
-      var ft=rm.score.fullTime||{}; var et=rm.score.extraTime||{};
-      var hg=et.home!=null?et.home:ft.home;
-      var ag=et.away!=null?et.away:ft.away;
-      if(hg===null||ag===null||hg===undefined||ag===undefined) return;
+      // Mata-mata: a API codifica fullTime como total geral (tempo normal + prorrogação + pênaltis),
+      // extraTime como delta de gols só na prorrogação e penalties como apenas os pênaltis convertidos.
+      // Placar do tempo normal+prorrogação = fullTime − extraTime − penalties.
+      var ft=rm.score.fullTime||{};
+      var et=rm.score.extraTime||{};
+      var pen=rm.score.penalties;
+      var ftH=ft.home; var ftA=ft.away;
+      if(ftH==null||ftA==null) return;
       var gm=allKo.find(function(m){return m.home===home&&m.away===away;});
       if(!gm) return;
+      var ph=pen&&pen.home!=null?pen.home:0;
+      var pa=pen&&pen.away!=null?pen.away:0;
+      var etH=et.home!=null?et.home:0;
+      var etA=et.away!=null?et.away:0;
+      var hg=pen?ftH-etH-ph:ftH;
+      var ag=pen?ftA-etA-pa:ftA;
+      // Resultado negativo = dado inválido na API; usa fullTime bruto como fallback
+      if(hg<0||ag<0){ hg=ftH; ag=ftA; ph=0; pa=0; }
+      // Partida de pênaltis deve terminar empatada antes do shootout.
+      // Se a subtração der placar assimétrico é inconsistência nos dados da API —
+      // usa o menor dos dois valores para forçar empate (campo de pênaltis fica visível).
+      if(pen&&ph>0&&pa>0&&hg!==ag){ var ms=Math.min(hg,ag); hg=ms; ag=ms; }
       var hKey=gm.id+"_h"; var aKey=gm.id+"_a"; var hVal=String(hg); var aVal=String(ag);
       if(next[hKey]!==hVal||next[aKey]!==aVal){ next[hKey]=hVal; next[aKey]=aVal; updated++; }
-      if(rm.score.penalties){
-        var ph=rm.score.penalties.home; var pa=rm.score.penalties.away;
-        if(ph!=null&&pa!=null){
-          if(next[gm.id+"_ph"]!==String(ph)||next[gm.id+"_pa"]!==String(pa)){
-            next[gm.id+"_ph"]=String(ph); next[gm.id+"_pa"]=String(pa); updated++;
-          }
+      if(pen&&ph>0&&pa>0){
+        if(next[gm.id+"_ph"]!==String(ph)||next[gm.id+"_pa"]!==String(pa)){
+          next[gm.id+"_ph"]=String(ph); next[gm.id+"_pa"]=String(pa); updated++;
         }
       }
     }
