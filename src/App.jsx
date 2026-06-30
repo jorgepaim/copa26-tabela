@@ -521,16 +521,30 @@ function KnockoutRow(p){
 
 // ── Atualização de placares via API ─────────────────────────────────────────
 var SCORES_API_URL = "https://copa26-proxy.brzl.workers.dev";
-function applyRemoteScores(remoteMatches, prevScores){
+function applyRemoteScores(remoteMatches, prevScores, ko){
   var next = Object.assign({}, prevScores);
   var updated = 0;
+  var allKo=[];
+  if(ko){ allKo=[].concat(ko.r32||[],ko.r16||[],ko.qf||[],ko.sf||[],ko.third?[ko.third]:[],ko.final?[ko.final]:[]); }
   remoteMatches.forEach(function(rm){
-    if(rm.stage!=="GROUP_STAGE") return;
     if(!rm.score||!rm.score.fullTime) return;
     var hg=rm.score.fullTime.home; var ag=rm.score.fullTime.away;
     if(hg===null||ag===null||hg===undefined||ag===undefined) return;
     var home=rm.homeTeam&&rm.homeTeam.tla; var away=rm.awayTeam&&rm.awayTeam.tla;
-    var gm=MATCHES.find(function(m){return m.home===home&&m.away===away;});
+    var gm=null;
+    if(rm.stage==="GROUP_STAGE"){
+      gm=MATCHES.find(function(m){return m.home===home&&m.away===away;});
+    } else {
+      gm=allKo.find(function(m){return m.home===home&&m.away===away;});
+      if(gm&&rm.score.penalties){
+        var ph=rm.score.penalties.home; var pa=rm.score.penalties.away;
+        if(ph!==null&&pa!==null&&ph!==undefined&&pa!==undefined){
+          if(next[gm.id+"_ph"]!==String(ph)||next[gm.id+"_pa"]!==String(pa)){
+            next[gm.id+"_ph"]=String(ph); next[gm.id+"_pa"]=String(pa); updated++;
+          }
+        }
+      }
+    }
     if(!gm) return;
     var hKey=gm.id+"_h"; var aKey=gm.id+"_a"; var hVal=String(hg); var aVal=String(ag);
     if(next[hKey]!==hVal||next[aKey]!==aVal){ next[hKey]=hVal; next[aKey]=aVal; updated++; }
@@ -557,7 +571,7 @@ export default function App(){
     fetch(SCORES_API_URL)
       .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
       .then(function(data){
-        var result=applyRemoteScores(data.matches||[],scores);
+        var result=applyRemoteScores(data.matches||[],scores,knockout);
         setScores(result.scores);
         try{localStorage.setItem("tabela26_sc",JSON.stringify(result.scores));}catch{ /* noop */ }
         setUpdateMsg(result.updated>0?result.updated+" placar(es) atualizado(s).":"Nenhum jogo novo finalizado ainda.");
@@ -646,7 +660,7 @@ export default function App(){
             <div style={{background:"linear-gradient(90deg,#002776,#009c3b)",borderRadius:14,padding:"10px 14px",marginBottom:14}}>
               <div style={{color:"#ffdf00",fontWeight:900,fontSize:13}}>{fase==="grupos"?"Jogos da Fase de Grupos":"Fase Eliminatória"}</div>
               <div style={{color:"rgba(255,255,255,0.7)",fontSize:11}}>
-                {fase==="grupos"?"72 partidas · Placares editáveis · escolha a fase abaixo":"Projeção ao vivo a partir da classificação (1º e 2º de cada grupo + 8 melhores 3ºs · regras FIFA)"}
+                {fase==="grupos"?"72 partidas · Placares editáveis · escolha a fase abaixo":"Placares editáveis · projeção ao vivo a partir da classificação (1º e 2º de cada grupo + 8 melhores 3ºs · regras FIFA)"}
               </div>
             </div>
 
